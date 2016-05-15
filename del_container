@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+# input handling
+if [ -z $1 ];
+then
+  echo "First parameter needs to be the container name"
+  exit 1
+else
+  C_NAME=$1
+fi
+
+# Default Settings
+ZPOOL="zpool_data"
+ZFS_ROOT="containers"
+C_BASE_DIR="/data/containers"
+C_PATH="${C_BASE_DIR}/${C_NAME}"
+
+function __container_delete() {
+  sudo docker stop $C_NAME
+  sudo docker rm -f $C_NAME
+}
+
+function __zfs_delete() {
+  ZFS_FS_NAME="${ZPOOL}/${ZFS_ROOT}/${C_NAME}"
+  sudo zfs destroy "${ZFS_FS_NAME}"
+}
+
+echo "Beginning delete for ${C_NAME}"
+__container_delete
+__zfs_delete
+echo "Finished creating home for ${C_NAME}"
+
+

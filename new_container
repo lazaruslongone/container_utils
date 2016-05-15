@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+# input handling
+if [ -z $1 ];
+then
+  echo "First parameter needs to be the container name"
+  exit 1
+else
+  C_NAME=$1
+fi
+
+# Default Settings
+C_OWNER="${C_OWNER:-containerbuddy}"
+C_GROUP="${C_GROUP:-$C_OWNER}"
+
+ZPOOL="zpool_data"
+ZFS_ROOT="containers"
+C_BASE_DIR="/data/containers"
+C_PATH="${C_BASE_DIR}/${C_NAME}"
+
+####
+
+function __zfs_create() {
+  ZFS_FS_NAME="${ZPOOL}/${ZFS_ROOT}/${C_NAME}"
+  sudo zfs create "${ZFS_FS_NAME}"
+  if [[ $? -ne 0 ]];
+  then
+    echo "exiting...."
+    exit 1
+  fi
+  sudo zfs set aclinherit=passthrough $ZFS_FS_NAME
+  sudo zfs set acltype=posixacl $ZFS_FS_NAME
+  sudo zfs list $ZFS_FS_NAME
+}
+
+function __config_dir_create() {
+  if [[ ! -d ${C_NAME}/configs ]];
+  then
+    sudo mkdir -pv $C_PATH/configs
+  fi
+}
+
+function __copy_skeleton() {
+  sudo rsync -aqP --delete ${C_BASE_DIR}/__skel/ \
+    $C_PATH
+}
+
+function __set_acls() {
+  # set default and recursive ACLs
+  # for the new zfs filesystem
+  sudo setfacl -d -m \
+    u:$C_OWNER:rwx,g:$C_GROUP:rwx,o:r $C_PATH
+}
+
+function __set_fs_perms() {
+  # zfs creates with root:root
+  # that's not what we want
+  sudo chown -R $C_OWNER:$C_GROUP $C_PATH
+  # u/g everything, other read-only
+  sudo chmod -R 774 $C_PATH
+}
+
+echo "Creating home for ${C_NAME}"
+__zfs_create
+__config_dir_create
+__copy_skeleton
+__set_acls
+__set_fs_perms
+echo "Finished creating home for ${C_NAME}"
+
+
